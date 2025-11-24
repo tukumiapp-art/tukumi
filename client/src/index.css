@@ -1,17 +1,8 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
-  /* --- TUKUMI BRAND COLORS --- */
-  --color-primary: #008080;       /* Teal */
-  --color-primary-dark: #006666;
-  --color-primary-light: #00A0A0;
-  --color-accent: #FF6B6B;        /* Coral */
-  --color-gold: #FFD166;          /* Aristocratic Gold */
-  --color-dark: #1A2634;          /* Deep Blue-Grey (Softer than black) */
-  
-  --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
+/* --- GLOBAL STYLES --- */
 body {
   /* The "Aristocratic Mesh" Background */
   background: 
@@ -20,15 +11,13 @@ body {
     radial-gradient(at 100% 100%, rgba(0, 128, 128, 0.1) 0px, transparent 50%),
     linear-gradient(135deg, #fdfbf7 0%, #f4f7f6 100%);
   
-  background-attachment: fixed; /* Keeps the gradient still while scrolling */
-  color: var(--color-dark);
-  font-family: var(--font-sans);
+  background-attachment: fixed;
+  color: #1A2634;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-/* --- THE "GLASS" UTILITY --- */
-/* This makes everything look premium and unique */
+/* --- UTILITIES --- */
 .glass-panel {
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(16px);
