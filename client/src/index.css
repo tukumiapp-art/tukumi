@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* --- TUKUMI BRAND COLORS --- */
+  --color-primary: #008080;       /* Teal */
+  --color-primary-dark: #006666;
+  --color-primary-light: #00A0A0;
+  --color-accent: #FF6B6B;        /* Coral */
+  --color-gold: #FFD166;          /* Aristocratic Gold */
+  --color-dark: #1A2634;          /* Deep Blue-Grey (Softer than black) */
+  
+  --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  /* The "Aristocratic Mesh" Background */
+  background: 
+    radial-gradient(at 0% 0%, rgba(0, 128, 128, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(255, 209, 102, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(0, 128, 128, 0.1) 0px, transparent 50%),
+    linear-gradient(135deg, #fdfbf7 0%, #f4f7f6 100%);
+  
+  background-attachment: fixed; /* Keeps the gradient still while scrolling */
+  color: var(--color-dark);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --- THE "GLASS" UTILITY --- */
+/* This makes everything look premium and unique */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 128, 128, 0.05);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 128, 128, 0.3); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 128, 128, 0.6); }
