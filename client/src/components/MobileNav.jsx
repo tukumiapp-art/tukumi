@@ -10,17 +10,53 @@ const MobileNav = () => {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
   
-  const [showSearch, setShowSearch] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [unreadMsgCount, setUnreadMsgCount] = useState(0); 
   
+  // --- LOGO INTERACTION REFS ---
   const pressTimer = useRef(null);
   const isLongPress = useRef(false);
+  const lastTapTime = useRef(0); // Track double taps
 
-  const handlePressStart = () => { isLongPress.current = false; pressTimer.current = setTimeout(() => { isLongPress.current = true; handleSignOut(); }, 3000); };
-  const handlePressEnd = () => { clearTimeout(pressTimer.current); };
-  const handleSignOut = async () => { if (navigator.vibrate) navigator.vibrate(200); if (window.confirm("Do you want to sign out?")) { try { await signOut(auth); } catch (e) { console.error(e); } } };
-  const handleCentralClick = (e) => { if (!isLongPress.current) { navigate('/'); } };
+  // Long Press Logic (Sign Out)
+  const handlePressStart = () => { 
+      isLongPress.current = false; 
+      pressTimer.current = setTimeout(() => { 
+          isLongPress.current = true; 
+          handleSignOut(); 
+      }, 3000); 
+  };
+  
+  const handlePressEnd = () => { 
+      clearTimeout(pressTimer.current); 
+  };
+
+  const handleSignOut = async () => { 
+      if (navigator.vibrate) navigator.vibrate(200); 
+      if (window.confirm("Do you want to sign out?")) { 
+          try { await signOut(auth); } catch (e) { console.error(e); } 
+      } 
+  };
+
+  // --- THE NEW LOGIC: CENTRAL BUTTON CLICK ---
+  const handleCentralClick = (e) => { 
+      if (isLongPress.current) return; // Ignore if it was a long press
+
+      const currentTime = new Date().getTime();
+      const tapLength = currentTime - lastTapTime.current;
+
+      if (tapLength < 300 && tapLength > 0) {
+          // DOUBLE TAP DETECTED
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (navigator.vibrate) navigator.vibrate(50); // Tiny haptic feedback
+      } else {
+          // SINGLE TAP
+          if (location.pathname !== '/') {
+              navigate('/');
+          }
+      }
+      lastTapTime.current = currentTime;
+  };
 
   // Listen for Unread Messages
   useEffect(() => {
@@ -38,6 +74,7 @@ const MobileNav = () => {
     return () => unsubAuth();
   }, []);
 
+  // Keyboard handling to hide nav on mobile typing
   useEffect(() => {
     const handleFocusIn = (e) => { if (['input', 'textarea'].includes(e.target.tagName.toLowerCase()) || e.target.isContentEditable) setIsVisible(false); };
     const handleFocusOut = () => { setTimeout(() => { if (!['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase())) setIsVisible(true); }, 200); };
@@ -56,26 +93,31 @@ const MobileNav = () => {
   );
 
   return (
-    <>
-        <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[90] transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}`}>
-          <div className="h-[65px] bg-white/95 backdrop-blur-xl border-t border-gray-200 flex justify-between items-center shadow-[0_-5px_20px_rgba(0,0,0,0.05)] px-1 pb-safe">
-            <NavItem to="/dating" icon="fa-heart" activeColor="text-pink-500" />
-            <NavItem to="/circles" icon="fa-dot-circle" />
-            
-            {/* MESSAGES IS BACK HERE WITH BADGE */}
-            <NavItem to="/messages" icon="fa-comment-dots" badgeCount={unreadMsgCount} />
+    <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[90] transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className="h-[65px] bg-white/95 backdrop-blur-xl border-t border-gray-200 flex justify-between items-center shadow-[0_-5px_20px_rgba(0,0,0,0.05)] px-1 pb-safe">
+        <NavItem to="/dating" icon="fa-heart" activeColor="text-pink-500" />
+        <NavItem to="/circles" icon="fa-dot-circle" />
+        
+        <NavItem to="/messages" icon="fa-comment-dots" badgeCount={unreadMsgCount} />
 
-            <div className="relative -top-6 mx-1">
-              <button onMouseDown={handlePressStart} onMouseUp={handlePressEnd} onTouchStart={handlePressStart} onTouchEnd={handlePressEnd} onClick={handleCentralClick} className="w-14 h-14 bg-gradient-to-tr from-primary to-gold rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/40 border-4 border-white transform active:scale-95 transition-transform select-none"><i className="fas fa-cube text-2xl"></i></button>
-            </div>
-
-            <NavItem to="/watch" icon="fa-play" />
-            <NavItem to="/marketplace" icon="fa-store" />
-            <NavItem to="/profile" icon="fa-user" />
-          </div>
+        <div className="relative -top-6 mx-1">
+          <button 
+            onMouseDown={handlePressStart} 
+            onMouseUp={handlePressEnd} 
+            onTouchStart={handlePressStart} 
+            onTouchEnd={handlePressEnd} 
+            onClick={handleCentralClick} 
+            className="w-14 h-14 bg-gradient-to-tr from-primary to-gold rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/40 border-4 border-white transform active:scale-95 transition-transform select-none"
+          >
+            <i className="fas fa-cube text-2xl"></i>
+          </button>
         </div>
-        {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
-    </>
+
+        <NavItem to="/watch" icon="fa-play" />
+        <NavItem to="/marketplace" icon="fa-store" />
+        <NavItem to="/profile" icon="fa-user" />
+      </div>
+    </div>
   );
 };
 

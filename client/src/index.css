@@ -1,7 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+@theme {
+  --color-primary: #008080;
+  --color-primary-dark: #006666;
+  --color-primary-light: #00A0A0;
+  --color-accent: #FF6B6B;
+  --color-gold: #FFD166;
+  --color-dark: #1A2634;
+  --font-sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
 /* --- GLOBAL STYLES --- */
 body {
   /* The "Aristocratic Mesh" Background */

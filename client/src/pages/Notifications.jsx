@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../api/firebase';
-import { 
-  collection, query, where, orderBy, onSnapshot, 
-  updateDoc, doc, writeBatch, arrayUnion, deleteDoc 
+import {
+  collection, query, where, orderBy, onSnapshot,
+  updateDoc, doc, writeBatch, arrayUnion, deleteDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import TopBar from '../components/TopBar';
@@ -12,7 +12,7 @@ import TopBar from '../components/TopBar';
 const InitialsAvatar = ({ name, url }) => {
     const initials = name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
     const hasValidImage = url && !url.includes('via.placeholder') && !url.includes('ui-avatars');
-    
+
     if (hasValidImage) {
         return <img src={url} className="w-12 h-12 rounded-full object-cover border border-gray-200" alt={name} />;
     }
@@ -33,9 +33,9 @@ const Notifications = () => {
     const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        
+
         const q = query(
-            collection(db, 'notifications'), 
+            collection(db, 'notifications'),
             where('recipientId', '==', currentUser.uid),
             orderBy('timestamp', 'desc')
         );
@@ -45,7 +45,7 @@ const Notifications = () => {
             setNotifications(notifs);
             setLoading(false);
         });
-        
+
         return () => unsubNotifs();
       } else {
           navigate('/');
@@ -87,20 +87,57 @@ const Notifications = () => {
       try { await deleteDoc(doc(db, 'notifications', notif.id)); } catch (err) { console.error(err); }
   };
 
+  // --- UPDATED HANDLER WITH SMART NAVIGATION ---
   const handleNotificationClick = async (notif) => {
       if (notif.type === 'team_invite') return; // Handled by buttons
 
-      // Mark as read
+      // 1. Mark as read
       if (!notif.isRead) {
-        await updateDoc(doc(db, 'notifications', notif.id), { isRead: true });
+          await updateDoc(doc(db, 'notifications', notif.id), { isRead: true });
       }
 
-      // Navigation
-      if (notif.type === 'follow' || notif.type === 'circle_join') navigate(`/profile/${notif.senderId}`);
-      else if (notif.type === 'review' || notif.type === 'question') navigate(`/product/${notif.targetId}`);
-      else if (notif.type === 'follow_business') navigate(`/business/${notif.targetId}`);
-      else navigate('/'); 
+      // NOTE: Removed setShowDropdown(false) since this is the full page component.
+
+      // 2. SMART NAVIGATION
+      switch (notif.type) {
+          case 'like':
+          case 'mention':
+              // Go to the specific post
+              navigate(`/post/${notif.targetId}`);
+              break;
+
+          case 'comment':
+              // Go to post and pass comment ID to highlight it (optional feature)
+              navigate(`/post/${notif.targetId}`, { state: { commentId: notif.commentId } });
+              break;
+
+          case 'review':
+              // Go to product and open Reviews tab
+              navigate(`/product/${notif.targetId}`, { state: { activeTab: 'reviews' } });
+              break;
+
+          case 'question':
+          case 'answer':
+              // Go to product and open Q&A tab
+              navigate(`/product/${notif.targetId}`, { state: { activeTab: 'qa' } });
+              break;
+
+          case 'follow':
+          case 'circle_join':
+              // Go to User Profile
+              navigate(`/profile/${notif.senderId}`);
+              break;
+
+          case 'follow_business':
+              // Go to Business Page
+              navigate(`/business/${notif.targetId}`);
+              break;
+
+          default:
+              navigate('/');
+      }
   };
+
 
   const handleClearAll = async () => {
       if (!confirm("Clear all notifications?")) return;
@@ -112,7 +149,7 @@ const Notifications = () => {
   const handleMarkAllRead = async () => {
       const batch = writeBatch(db);
       notifications.forEach(n => {
-          if(!n.isRead) batch.update(doc(db, 'notifications', n.id), { isRead: true });
+          if (!n.isRead) batch.update(doc(db, 'notifications', n.id), { isRead: true });
       });
       await batch.commit();
   };
@@ -122,7 +159,7 @@ const Notifications = () => {
   return (
     <div className="p-4 md:p-6 w-full max-w-[1000px] mx-auto pb-24">
         <div className="hidden md:block"><TopBar /></div>
-        
+
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
                 <button onClick={() => navigate(-1)} className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-dark"><i className="fas fa-arrow-left"></i></button>
@@ -148,22 +185,23 @@ const Notifications = () => {
                 </div>
             ) : (
                 notifications.map(notif => (
-                    <div 
-                        key={notif.id} 
+                    <div
+                        key={notif.id}
                         onClick={() => handleNotificationClick(notif)}
-                        className={`relative group flex gap-4 p-4 rounded-2xl cursor-pointer transition-all border 
+                        className={`relative group flex gap-4 p-4 rounded-2xl cursor-pointer transition-all border
                         ${!notif.isRead ? 'bg-white border-primary/20 shadow-sm' : 'bg-gray-50/50 border-transparent hover:bg-white hover:shadow-sm'}`}
                     >
                         <InitialsAvatar name={notif.senderName} url={notif.senderAvatar} />
-                        
+
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start">
                                 <p className="text-sm text-gray-800 leading-snug pr-8">
-                                    <span className="font-bold text-dark">{notif.senderName}</span> 
+                                    <span className="font-bold text-dark">{notif.senderName}</span>
                                     <span className="text-gray-600">
                                         {notif.type === 'team_invite' && ` invited you to join ${notif.pageName} as ${notif.role}.`}
                                         {notif.type === 'review' && ` ${notif.message || 'reviewed your product.'}`}
                                         {notif.type === 'question' && ` ${notif.message || 'asked a question.'}`}
+                                        {notif.type === 'answer' && ` ${notif.message || 'answered your question.'}`}
                                         {notif.type === 'follow_business' && ` ${notif.message}`}
                                         {notif.type === 'like' && ' liked your post.'}
                                         {notif.type === 'comment' && ' commented on your post.'}
@@ -179,14 +217,14 @@ const Notifications = () => {
                             {/* Action Buttons for Team Invites */}
                             {notif.type === 'team_invite' && (
                                 <div className="flex gap-3 mt-3">
-                                    <button 
-                                        onClick={(e) => handleAcceptInvite(e, notif)} 
+                                    <button
+                                        onClick={(e) => handleAcceptInvite(e, notif)}
                                         className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:bg-primary-dark transition-all"
                                     >
                                         Accept Invite
                                     </button>
-                                    <button 
-                                        onClick={(e) => handleDeclineInvite(e, notif)} 
+                                    <button
+                                        onClick={(e) => handleDeclineInvite(e, notif)}
                                         className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all"
                                     >
                                         Decline

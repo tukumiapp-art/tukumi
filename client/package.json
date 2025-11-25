@@ -10,6 +10,9 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^3.1.1",
     "@stripe/stripe-js": "^5.5.0",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@tailwindcss/vite": "^4.1.17",
+    "@vitejs/plugin-react": "^4.3.1",
     "date-fns": "^3.6.0",
     "firebase": "^10.14.1",
     "font-awesome": "^4.7.0",
@@ -18,10 +21,11 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "socket.io-client": "^4.8.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
     "vite": "^5.4.11"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17"
   }
 }

@@ -1,25 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite' // <--- Import this
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    tailwindcss(), // <--- Add this to the plugins array
+  ],
   css: {
     devSourcemap: false,
-  },
-  build: {
-    sourcemap: false,
   },
   server: {
     hmr: {
       overlay: false
     },
-    
-    // --- ADD THESE LINES ---
-    host: true, // Make server accessible externally
+    host: true,
     allowedHosts: [
-      '.ngrok-free.dev' // Allows any ngrok free URL
+      '.ngrok-free.dev'
     ]
-    // -----------------------
   }
 })

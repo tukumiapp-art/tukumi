@@ -14,7 +14,7 @@ import SearchModal from '../components/SearchModal';
 // --- Configuration Constants ---
 const DEFAULT_AVATAR = "https://via.placeholder.com/150/000000/FFFFFF?text=A";
 
-// --- 1. UPDATED POST TEXT EXPANDER (Smart Truncation) ---
+// --- 1. POST TEXT EXPANDER (Smart Truncation) ---
 const PostTextExpander = ({ text, hasMedia }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -43,7 +43,7 @@ const PostTextExpander = ({ text, hasMedia }) => {
   );
 };
 
-// --- 2. UPDATED COMMENTS LIST (Threading & Navigation) ---
+// --- 2. COMMENTS LIST (Threading & Navigation) ---
 const CommentsList = ({ postId, user, setCommentText, setActiveCommentBox, setReplyingToId }) => {
   const navigate = useNavigate();
   const [comments, setComments] = useState([]);
@@ -141,6 +141,10 @@ const Home = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef(null);
   
+  // --- NEW: Video Category State ---
+  const [videoCategory, setVideoCategory] = useState('General');
+  const videoCategories = ['General', 'Music', 'Gaming', 'Comedy', 'Tech', 'Sports', 'Dance', 'Food'];
+
   // Interaction States
   const [activeCommentBox, setActiveCommentBox] = useState(null);
   const [commentText, setCommentText] = useState(''); 
@@ -177,6 +181,19 @@ const Home = () => {
     return () => { unsubAuth(); unsubPosts(); document.removeEventListener('click', handleClickOutside); };
   }, []);
 
+  // --- AUTO-DETECT CATEGORY FROM HASHTAGS ---
+  useEffect(() => {
+      if (mediaType === 'video') {
+          const lowerText = newPostText.toLowerCase();
+          if (lowerText.includes('#music') || lowerText.includes('song')) setVideoCategory('Music');
+          else if (lowerText.includes('#gaming') || lowerText.includes('game')) setVideoCategory('Gaming');
+          else if (lowerText.includes('#comedy') || lowerText.includes('funny')) setVideoCategory('Comedy');
+          else if (lowerText.includes('#tech')) setVideoCategory('Tech');
+          else if (lowerText.includes('#sports')) setVideoCategory('Sports');
+          else if (lowerText.includes('#food')) setVideoCategory('Food');
+      }
+  }, [newPostText, mediaType]);
+
   // --- ACTIONS ---
 
   const handlePost = async () => {
@@ -189,11 +206,28 @@ const Home = () => {
         await uploadBytes(storageRef, mediaFile);
         downloadURL = await getDownloadURL(storageRef);
       }
+      
       await addDoc(collection(db, 'posts'), {
-        text: newPostText, uid: user.uid, userName: user.displayName || "Aristocrat", userAvatar: user.photoURL,
-        mediaURL: downloadURL, mediaType: mediaType, timestamp: serverTimestamp(), likes: 0, likedBy: [], comments: 0, isPrivate: false
+        text: newPostText, 
+        uid: user.uid, 
+        userName: user.displayName || "Aristocrat", 
+        userAvatar: user.photoURL,
+        mediaURL: downloadURL, 
+        mediaType: mediaType, 
+        // Save the category if it's a video, otherwise default to General
+        category: mediaType === 'video' ? videoCategory : 'General',
+        timestamp: serverTimestamp(), 
+        likes: 0, 
+        likedBy: [], 
+        comments: 0, 
+        isPrivate: false
       });
-      setNewPostText(''); setMediaFile(null); setMediaPreview(null);
+      
+      // Reset States
+      setNewPostText(''); 
+      setMediaFile(null); 
+      setMediaPreview(null);
+      setVideoCategory('General'); // Reset category
     } catch (e) { console.error(e); } finally { setIsPosting(false); }
   };
 
@@ -260,11 +294,13 @@ const Home = () => {
   
   const handleTogglePrivate = async (post) => { await updateDoc(doc(db, 'posts', post.id), { isPrivate: !post.isPrivate }); setActiveMenuPostId(null); };
   const handleDelete = async (id) => { if (window.confirm("Are you sure you want to delete this post?")) await deleteDoc(doc(db, 'posts', id)); };
+  
   const handleFileSelect = (e) => { 
     const file = e.target.files[0]; 
     if (!file) return; 
     setMediaFile(file); 
-    setMediaType(file.type.startsWith('video/') ? 'video' : 'image'); 
+    const type = file.type.startsWith('video/') ? 'video' : 'image';
+    setMediaType(type); 
     setMediaPreview(URL.createObjectURL(file)); 
   };
   
@@ -301,7 +337,7 @@ const Home = () => {
     <div className="p-4 md:p-6 w-full max-w-[1200px] mx-auto">
       <TopBar />
       
-      {/* --- HEADER (Simplified for Mobile: Search is in TopBar now) --- */}
+      {/* --- HEADER --- */}
       <div className="flex justify-between items-center mb-8">
         <div>
             <h2 className="text-3xl font-black text-dark tracking-tight">The Feed</h2>
@@ -319,12 +355,29 @@ const Home = () => {
                 <img src={user?.photoURL || DEFAULT_AVATAR} className="w-12 h-12 rounded-2xl object-cover" alt="User Avatar" />
                 <div className="flex-1">
                   <textarea placeholder="Share your thoughts..." className="w-full bg-transparent border-none outline-none text-lg resize-none mt-2 placeholder-gray-400" rows="2" value={newPostText} onChange={(e) => setNewPostText(e.target.value)}></textarea>
+                  
+                  {/* MEDIA PREVIEW */}
                   {mediaPreview && (
                     <div className="relative mt-2 inline-block group">
                       {mediaType === 'video' ? <video src={mediaPreview} controls className="h-32 rounded-xl bg-black" /> : <img src={mediaPreview} className="h-32 rounded-xl" />}
                       <button onClick={() => { setMediaFile(null); setMediaPreview(null); }} className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center"><i className="fas fa-times text-xs"></i></button>
                     </div>
                   )}
+
+                  {/* CATEGORY SELECTOR (Only for Videos) */}
+                  {mediaType === 'video' && (
+                      <div className="mt-3 flex items-center gap-2 animate-fade-in">
+                          <span className="text-xs font-bold text-gray-500 uppercase">Category:</span>
+                          <select 
+                            value={videoCategory} 
+                            onChange={(e) => setVideoCategory(e.target.value)}
+                            className="bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer border border-primary/20 hover:bg-primary/20 transition-colors"
+                          >
+                              {videoCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                          </select>
+                      </div>
+                  )}
+
                 </div>
               </div>
               <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200/50 relative">
