@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #008080;
+  --color-primary-dark: #006666;
+  --color-primary-light: #00A0A0;
+  --color-accent: #FF6B6B;
+  --color-gold: #FFD166;
+  --color-dark: #1A2634;
+  --font-sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* --- MOBILE NOTCH / STATUS BAR SUPPORT --- */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+}
+
+body {
+  /* Ensure the app background doesn't bleed under the status bar weirdly */
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  
+  /* The "Aristocratic Mesh" Background (Light Mode) */
+  background: 
+    radial-gradient(at 0% 0%, rgba(0, 128, 128, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(255, 209, 102, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(0, 128, 128, 0.1) 0px, transparent 50%),
+    linear-gradient(135deg, #fdfbf7 0%, #f4f7f6 100%);
+  
+  background-attachment: fixed;
+  color: #1A2634;
+  min-height: 100vh;
+  overflow-x: hidden;
+  
+  /* Prevent bounce scroll on mobile for better app-feel */
+  overscroll-behavior-y: none;
+}
+
+/* --- UTILITIES (Light Mode Base) --- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 128, 128, 0.05);
+}
+
+/* Extra padding for top elements to clear status bar if position is fixed/absolute */
+.pt-safe {
+    padding-top: calc(var(--sat) + 1rem);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 128, 128, 0.3); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 128, 128, 0.6); }
+
+/* --- DARK MODE OVERRIDES --- */
+.dark body {
+  /* Dark background gradient */
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc; /* Light text color */
+}
+
+.dark .glass-panel {
+  /* Dark glass effect */
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); /* Adjusted shadow for dark mode */
+}
+
+/* Text and Background Overrides for common Tailwind classes */
+.dark .text-dark { color: #f8fafc !important; }
+.dark .bg-white { background-color: #1e293b; }
+.dark .border-gray-100, .dark .border-gray-200 { border-color: #334155; }
+.dark .bg-gray-50, .dark .bg-gray-100 { background-color: #0f172a; }
+.dark .text-gray-500, .dark .text-gray-600 { color: #94a3b8; }
+.dark .text-gray-400 { color: #64748b; }
+
+/* Input field overrides */
+.dark input, 
+.dark textarea, 
+.dark select {
+  color: white;
+  background-color: #0f172a;
+  border-color: #334155;
+}

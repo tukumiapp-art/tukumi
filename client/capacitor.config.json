@@ -1,0 +1,5 @@
+{
+  "appId": "com.tukumi.app",
+  "appName": "tukumi-client",
+  "webDir": "dist"
+}
