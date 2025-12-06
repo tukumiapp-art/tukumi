@@ -87,10 +87,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // --- Serve Frontend ---
 // This serves the React app build when the API routes are not hit
 // It is no longer conditional on process.env.NODE_ENV
-app.use(express.static(path.join(__dirname, "../dist")));
+// --- Serve Frontend ---
+// CHANGED: Point to '../client/dist' where Vite actually builds the app
+app.use(express.static(path.join(__dirname, "../client/dist")));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "../dist", "index.html"));
+  res.sendFile(path.resolve(__dirname, "../client/dist", "index.html"));
 });
 
 
