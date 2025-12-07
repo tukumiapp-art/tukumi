@@ -103,13 +103,17 @@ export const CallProvider = ({ children }) => {
     if (!user) return;
     try {
       const safeConversationId = conversationId || null;
+      // 🚀 UPDATE: Ensure avatar is null if undefined to avoid Firebase error
+      const safeAvatar = recipientAvatar || null;
+
       const callDoc = await addDoc(collection(db, 'calls'), {
         callerId: user.uid,
         callerName: user.displayName || 'Unknown',
         callerAvatar: user.photoURL || null,
         receiverId: recipientId,
         receiverName: recipientName,
-        receiverAvatar: recipientAvatar,
+        // 🚀 UPDATE
+        receiverAvatar: safeAvatar,
         conversationId: safeConversationId,
         type,
         status: 'ringing',
@@ -118,7 +122,13 @@ export const CallProvider = ({ children }) => {
       });
       
       startTimeRef.current = Date.now();
-      setActiveCall({ id: callDoc.id, isCaller: true, otherUser: { name: recipientName, avatar: recipientAvatar }, type, conversationId: safeConversationId });
+      setActiveCall({ 
+          id: callDoc.id, 
+          isCaller: true, 
+          otherUser: { name: recipientName, avatar: safeAvatar }, 
+          type, 
+          conversationId: safeConversationId 
+      });
     } catch (error) { 
         console.error("Error starting call:", error); 
         alert("Could not connect call. Check internet connection.");

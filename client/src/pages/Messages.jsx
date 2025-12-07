@@ -73,7 +73,6 @@ const ShinobiMessenger = () => {
 
   const [allUsers, setAllUsers] = useState([]);
   const scrollRef = useRef();
-  const mediaSectionRef = useRef(); 
   const messageSound = useRef(null);
   
   // --- VIEWPORT FIX ---
@@ -178,29 +177,37 @@ const ShinobiMessenger = () => {
       setActiveChat(chatData);
       setIsMobileChatOpen(true);
       setShowDetails(false);
+      setIsSearchingChat(false); // Reset search state
+      setChatSearch('');
       setReplyingTo(null);
       setEditingMessage(null);
       window.dispatchEvent(new CustomEvent('toggle-nav', { detail: { visible: false } }));
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'auto' }), 100);
   };
 
-  // --- FIXED BACK BUTTON LOGIC (1 Step at a time) ---
+  // --- FIXED BACK NAVIGATION LOGIC ---
   const handleBackToChatList = () => {
-      // 1. If Info/Details is open, close ONLY that (Step 1)
+      // Priority 1: If Details is open, close it.
       if (showDetails) {
           setShowDetails(false);
           return;
       }
-
-      // 2. If Info is closed, Close Chat and go to List (Step 2)
+      // Priority 2: If Searching, close search.
+      if (isSearchingChat) {
+          setIsSearchingChat(false);
+          setChatSearch('');
+          return;
+      }
+      // Priority 3: Close Chat and go to list.
       setActiveChat(null);
       setIsMobileChatOpen(false);
       window.dispatchEvent(new CustomEvent('toggle-nav', { detail: { visible: true } }));
   };
 
+  // --- FIXED DUPLICATE & LOAD LOGIC ---
   const handleUserClick = async (otherUserId) => {
     if (otherUserId === user?.uid) { navigate('/profile'); return; }
     
+    // 1. Check loaded conversations first (Fastest)
     const existingLocal = conversations.find(c => !c.isGroup && c.participants.includes(otherUserId));
     if (existingLocal) { 
         openChat(existingLocal); 
@@ -208,11 +215,14 @@ const ShinobiMessenger = () => {
     }
 
     try {
+        // 2. Strict Database Check
         const q = query(
             collection(db, 'conversations'), 
             where('participants', 'array-contains', user.uid)
         );
         const snapshot = await getDocs(q);
+        
+        // Filter manually to ensure exact match and avoid "OR" query issues
         const found = snapshot.docs.find(doc => {
             const data = doc.data();
             return !data.isGroup && data.participants.includes(otherUserId);
@@ -224,6 +234,7 @@ const ShinobiMessenger = () => {
              if (data.users) otherUser = data.users.find(u => u.uid === otherUserId);
              openChat({ id: found.id, ...data, otherUser });
         } else {
+             // 3. Create New if absolutely not found
              const uDoc = await getDoc(doc(db, 'users', otherUserId));
              const otherData = uDoc.exists() ? uDoc.data() : { displayName: 'User', uid: otherUserId };
              const newChatData = {
@@ -260,6 +271,7 @@ const ShinobiMessenger = () => {
             if(found) { 
                 openChat(found); 
             } else {
+                // Fallback for Admin opening a chat not in their list
                 const fetchAdminView = async () => {
                     try {
                         const docRef = await getDoc(doc(db, 'conversations', targetId));
@@ -270,8 +282,6 @@ const ShinobiMessenger = () => {
                                 otherUser = data.users.find(u => u.uid !== user.uid) || { displayName: 'User' };
                             }
                             openChat({ id: docRef.id, ...data, otherUser });
-                        } else {
-                            alert("This conversation no longer exists.");
                         }
                     } catch(e) { console.error("Admin Fetch Error:", e); }
                 };
@@ -317,7 +327,11 @@ const ShinobiMessenger = () => {
     const q = query(collection(db, `conversations/${activeChat.id}/messages`), orderBy('timestamp', 'asc'));
     const unsub = onSnapshot(q, async (snap) => {
         setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        
+        // SMART SCROLL: Use 'auto' for initial load (instant), 'smooth' for updates
+        setTimeout(() => {
+            scrollRef.current?.scrollIntoView({ behavior: 'auto' });
+        }, 50);
     });
     return () => unsub();
   }, [activeChat, user]);
@@ -380,6 +394,8 @@ const ShinobiMessenger = () => {
     activeChat.participants.forEach(pid => { if (pid !== user.uid) updateData[`unreadCounts.${pid}`] = increment(1); });
     await updateDoc(doc(db, 'conversations', activeChat.id), updateData);
     setNewMessage(''); setShowAttachMenu(false); setReplyingTo(null); setIsTyping(false);
+    
+    // Smooth scroll for new message
     setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
@@ -726,33 +742,53 @@ const ShinobiMessenger = () => {
       <div className={`${!activeChat ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-[#f8fafc] relative min-w-0 h-full overflow-hidden`}>
         {activeChat ? (
           <>
+            {/* HEADER AREA: SEARCH vs NORMAL */}
             <div className="flex-none h-16 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 z-50 shrink-0 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                    <button onClick={handleBackToChatList} className="md:hidden w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i className="fas fa-arrow-left text-sm"></i></button>
-                    <Avatar 
-                        src={activeChat.isGroup ? activeChat.groupPhoto : activeChat.otherUser?.photoURL} 
-                        name={activeChat.isGroup ? activeChat.groupName : activeChat.otherUser?.displayName} 
-                        onClick={() => !activeChat.isGroup && navigate(`/profile/${activeChat.otherUser.uid}`)} 
-                    />
-                    <div className="min-w-0 cursor-pointer" onClick={() => !activeChat.isGroup && navigate(`/profile/${activeChat.otherUser.uid}`)}>
-                        <h3 className="font-bold text-gray-800 truncate">{activeChat.isGroup ? activeChat.groupName : activeChat.otherUser?.displayName}</h3>
-                        <div className="flex items-center gap-2">
-                            {Object.keys(typingStatus).some(uid => uid !== user?.uid && typingStatus[uid]) && (
-                                <p className="text-xs text-blue-500 font-bold animate-pulse">Typing...</p>
-                            )}
+                {isSearchingChat ? (
+                     <div className="flex items-center w-full gap-2 animate-fade-in">
+                        <button onClick={() => { setIsSearchingChat(false); setChatSearch(''); }} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200"><i className="fas fa-arrow-left"></i></button>
+                        <div className="flex-1 relative">
+                            <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input 
+                                autoFocus
+                                type="text" 
+                                placeholder="Search conversation..." 
+                                className="w-full bg-gray-100 pl-9 pr-4 py-2 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-200"
+                                value={chatSearch}
+                                onChange={e => setChatSearch(e.target.value)}
+                            />
                         </div>
-                    </div>
-                </div>
-                
-                <div className="flex gap-2 shrink-0">
-                    {!activeChat.isGroup && (
-                        <>
-                            <button onClick={() => startCall(activeChat.otherUser.uid, activeChat.otherUser.displayName, activeChat.otherUser.photoURL, 'audio', activeChat.id)} className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md transition-all flex items-center justify-center"><i className="fas fa-phone"></i></button>
-                            <button onClick={() => startCall(activeChat.otherUser.uid, activeChat.otherUser.displayName, activeChat.otherUser.photoURL, 'video', activeChat.id)} className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md transition-all flex items-center justify-center"><i className="fas fa-video"></i></button>
-                        </>
-                    )}
-                    <button onClick={() => setShowDetails(!showDetails)} className={`h-9 w-9 rounded-xl border transition-all flex items-center justify-center ${showDetails ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md'}`}><i className="fas fa-info-circle"></i></button>
-                </div>
+                     </div>
+                ) : (
+                    <>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <button onClick={handleBackToChatList} className="md:hidden w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i className="fas fa-arrow-left text-sm"></i></button>
+                            <Avatar 
+                                src={activeChat.isGroup ? activeChat.groupPhoto : activeChat.otherUser?.photoURL} 
+                                name={activeChat.isGroup ? activeChat.groupName : activeChat.otherUser?.displayName} 
+                                onClick={() => !activeChat.isGroup && navigate(`/profile/${activeChat.otherUser.uid}`)} 
+                            />
+                            <div className="min-w-0 cursor-pointer" onClick={() => !activeChat.isGroup && navigate(`/profile/${activeChat.otherUser.uid}`)}>
+                                <h3 className="font-bold text-gray-800 truncate">{activeChat.isGroup ? activeChat.groupName : activeChat.otherUser?.displayName}</h3>
+                                <div className="flex items-center gap-2">
+                                    {Object.keys(typingStatus).some(uid => uid !== user?.uid && typingStatus[uid]) && (
+                                        <p className="text-xs text-blue-500 font-bold animate-pulse">Typing...</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-2 shrink-0">
+                            {!activeChat.isGroup && (
+                                <>
+                                    <button onClick={() => startCall(activeChat.otherUser.uid, activeChat.otherUser.displayName, activeChat.otherUser.photoURL, 'audio', activeChat.id)} className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md transition-all flex items-center justify-center"><i className="fas fa-phone"></i></button>
+                                    <button onClick={() => startCall(activeChat.otherUser.uid, activeChat.otherUser.displayName, activeChat.otherUser.photoURL, 'video', activeChat.id)} className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md transition-all flex items-center justify-center"><i className="fas fa-video"></i></button>
+                                </>
+                            )}
+                            <button onClick={() => setShowDetails(!showDetails)} className={`h-9 w-9 rounded-xl border transition-all flex items-center justify-center ${showDetails ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:shadow-md'}`}><i className="fas fa-info-circle"></i></button>
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[#f8fafc] w-full"> 
@@ -833,7 +869,10 @@ const ShinobiMessenger = () => {
         <div className="absolute inset-y-0 right-0 w-full md:w-80 bg-white shadow-2xl z-[60] transform transition-transform duration-300 ease-in-out border-l border-gray-100 overflow-y-auto h-full pt-safe pt-12">
            <div className="p-6">
              <div className="flex justify-between items-center mb-6">
-                 <h3 className="font-black text-lg text-gray-800">Details</h3>
+                 <div className="flex items-center gap-3">
+                     <button onClick={() => setShowDetails(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-700 md:hidden"><i className="fas fa-arrow-left"></i></button>
+                     <h3 className="font-black text-lg text-gray-800">Details</h3>
+                 </div>
                  <button onClick={() => setShowDetails(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600"><i className="fas fa-times"></i></button>
              </div>
              
@@ -852,7 +891,10 @@ const ShinobiMessenger = () => {
              
              <div className="grid grid-cols-3 gap-3 mb-6">
                  <button onClick={()=>toggleMuteChat(activeChat.id)} className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors"><i className="fas fa-bell"></i><span className="text-[10px] font-bold">Mute</span></button>
+                 
+                 {/* SEARCH ACTION: Triggers search mode in main header and closes details */}
                  <button onClick={()=>{setIsSearchingChat(true); setShowDetails(false); setChatSearch('')}} className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors"><i className="fas fa-search"></i><span className="text-[10px] font-bold">Search</span></button>
+                 
                  <button onClick={()=>setShowMediaGallery(true)} className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors"><i className="fas fa-image"></i><span className="text-[10px] font-bold">Media</span></button>
              </div>
              

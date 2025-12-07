@@ -148,9 +148,9 @@ const AdminDashboard = () => {
 
       // 2. SHINOBI: Chat Users / Messages
       if (rep.type === 'message' || (rep.type === 'user' && rep.context === 'shinobi')) {
-          // Opens Shinobi with the specific user selected
+          // 🚀 UPDATE: Ensure we pass the activeConversationId (which should be targetId for message/user reports)
           navigate('/messages', { 
-              state: { userId: rep.targetId } 
+              state: { activeConversationId: rep.targetId } 
           });
           return;
       }
