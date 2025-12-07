@@ -1,23 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite' // <--- Import this
+import tailwindcss from '@tailwindcss/vite'
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(), // <--- Add this to the plugins array
-  ],
-  css: {
-    devSourcemap: false,
-  },
-  server: {
-    hmr: {
-      overlay: false
-    },
-    host: true,
-    allowedHosts: [
-      '.ngrok-free.dev'
-    ]
+  plugins: [react(), tailwindcss()],
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // I removed '@headlessui/react' from the 'ui' array below:
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+          ui: ['framer-motion', 'lucide-react'] 
+        }
+      }
+    }
   }
 })

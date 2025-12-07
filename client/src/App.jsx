@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './api/firebase';
@@ -8,29 +8,30 @@ import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import GlobalListeners from './components/GlobalListeners';
 import Auth from './pages/Auth';
-import VerifyEmail from './pages/VerifyEmail'; 
+import VerifyEmail from './pages/VerifyEmail';
 
-import Home from './pages/Home';
-import Messages from './pages/Messages'; // Make sure this is the new one you updated
-import Profile from './pages/Profile';
-import Circles from './pages/Circles';
-import CircleDetails from './pages/CircleDetails';
-import Marketplace from './pages/Marketplace';
-import ProductDetails from './pages/ProductDetails';
-import BusinessHub from './pages/BusinessHub';
-import BusinessPage from './pages/BusinessPage';
-import SavedItems from './pages/SavedItems';
-import Watch from './pages/Watch';
-import Dating from './pages/Dating';
-import Notifications from './pages/Notifications';
-import Connections from './pages/Connections';
-import Explore from './pages/Explore';
-import PostDetails from './pages/PostDetails'; 
-import BkashCallback from './pages/BkashCallback';
-import AdminDashboard from './pages/AdminDashboard';
-import BoostHub from './pages/BoostHub';
+// 🔥 LAZY-LOAD ALL PAGES
+const Home = lazy(() => import('./pages/Home'));
+const Messages = lazy(() => import('./pages/Messages'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Circles = lazy(() => import('./pages/Circles'));
+const CircleDetails = lazy(() => import('./pages/CircleDetails'));
+const Marketplace = lazy(() => import('./pages/Marketplace'));
+const ProductDetails = lazy(() => import('./pages/ProductDetails'));
+const BusinessHub = lazy(() => import('./pages/BusinessHub'));
+const BusinessPage = lazy(() => import('./pages/BusinessPage'));
+const SavedItems = lazy(() => import('./pages/SavedItems'));
+const Watch = lazy(() => import('./pages/Watch'));
+const Dating = lazy(() => import('./pages/Dating'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Connections = lazy(() => import('./pages/Connections'));
+const Explore = lazy(() => import('./pages/Explore'));
+const PostDetails = lazy(() => import('./pages/PostDetails'));
+const BkashCallback = lazy(() => import('./pages/BkashCallback'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const BoostHub = lazy(() => import('./pages/BoostHub'));
 
-// 1. IMPORT CONTEXT AND OVERLAY
+// CONTEXT
 import { CallProvider } from './context/CallContext';
 import CallOverlay from './components/CallOverlay';
 
@@ -48,14 +49,17 @@ function App() {
       setOfflineListenerCleanup();
 
       if (currentUser) {
-        if (currentUser.emailVerified) { 
-            const userRef = doc(db, 'users', currentUser.uid);
-            const setOffline = () => {
-              updateDoc(userRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(e => console.error(e));
-            };
-            await updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() });
-            window.addEventListener('beforeunload', setOffline);
-            setOfflineListenerCleanup = () => window.removeEventListener('beforeunload', setOffline);
+        if (currentUser.emailVerified) {
+          const userRef = doc(db, 'users', currentUser.uid);
+          const setOffline = () => {
+            updateDoc(userRef, { isOnline: false, lastSeen: serverTimestamp() })
+              .catch(e => console.error(e));
+          };
+
+          await updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() });
+          window.addEventListener('beforeunload', setOffline);
+          setOfflineListenerCleanup = () =>
+            window.removeEventListener('beforeunload', setOffline);
         }
       }
     });
@@ -73,28 +77,21 @@ function App() {
           <div className="w-16 h-16 bg-gradient-to-tr from-[#008080] to-[#FFD166] rounded-2xl animate-spin shadow-2xl shadow-teal-900/20 mb-6 flex items-center justify-center">
             <div className="w-8 h-8 bg-white/30 rounded-md"></div>
           </div>
-          <p className="text-[#008080] font-black text-sm tracking-[0.3em] uppercase">INITIALIZING TUKUMI...</p>
+          <p className="text-[#008080] font-black text-sm tracking-[0.3em] uppercase">
+            INITIALIZING TUKUMI...
+          </p>
         </div>
       </div>
     );
   }
 
-  // AUTH GATE
   if (!user) return <Auth />;
 
-  // VERIFICATION GATE
-  if (!user.emailVerified) {
-    return <VerifyEmail user={user} />;
-  }
+  if (!user.emailVerified) return <VerifyEmail user={user} />;
 
-  // MAIN APP
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      
-      {/* 2. WRAP EVERYTHING INSIDE CALLPROVIDER */}
       <CallProvider>
-        
-        {/* 3. ADD OVERLAY AND LISTENERS INSIDE THE PROVIDER */}
         <GlobalListeners />
         <CallOverlay />
 
@@ -103,32 +100,37 @@ function App() {
           <MobileNav />
 
           <div className="w-full md:ml-[300px] md:w-[calc(100%-300px)] p-4 pb-28 transition-all duration-300">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/explore" element={<Explore />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/profile/:id" element={<Profile />} />
-              <Route path="/profile/:id/connections" element={<Connections />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/watch" element={<Watch />} />
-              <Route path="/dating" element={<Dating />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/product/:id" element={<ProductDetails />} />
-              <Route path="/business" element={<BusinessHub />} />
-              <Route path="/business/:id" element={<BusinessPage />} />
-              <Route path="/circles" element={<Circles />} />
-              <Route path="/circles/:circleId" element={<CircleDetails />} />
-              <Route path="/saved-items" element={<SavedItems />} />
-              <Route path="/post/:id" element={<PostDetails />} />
-              <Route path="*" element={<Navigate to="/" />} />
-              <Route path="/bkash/callback" element={<BkashCallback />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/boost" element={<BoostHub />} />
-            </Routes>
+
+            {/* ⭐ WRAPPED IN SUSPENSE FOR LAZY LOADING */}
+            <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/explore" element={<Explore />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/profile/:id" element={<Profile />} />
+                <Route path="/profile/:id/connections" element={<Connections />} />
+                <Route path="/messages" element={<Messages />} />
+                <Route path="/watch" element={<Watch />} />
+                <Route path="/dating" element={<Dating />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/marketplace" element={<Marketplace />} />
+                <Route path="/product/:id" element={<ProductDetails />} />
+                <Route path="/business" element={<BusinessHub />} />
+                <Route path="/business/:id" element={<BusinessPage />} />
+                <Route path="/circles" element={<Circles />} />
+                <Route path="/circles/:circleId" element={<CircleDetails />} />
+                <Route path="/saved-items" element={<SavedItems />} />
+                <Route path="/post/:id" element={<PostDetails />} />
+                <Route path="/bkash/callback" element={<BkashCallback />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/boost" element={<BoostHub />} />
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+
+            </Suspense>
           </div>
         </div>
-
       </CallProvider>
     </BrowserRouter>
   );

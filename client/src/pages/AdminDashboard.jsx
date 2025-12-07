@@ -19,15 +19,20 @@ const AdminDashboard = () => {
   const [verifications, setVerifications] = useState([]);
   const [reports, setReports] = useState([]);
 
-  // 1. Auth Check
+  // 1. Auth & Admin Check
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        const userSnap = await getDoc(doc(db, 'users', u.uid));
-        if (userSnap.exists() && userSnap.data().isAdmin) {
-            setIsAdmin(true);
-        } else {
-            alert("Access Denied: Admins Only");
+        try {
+            const userSnap = await getDoc(doc(db, 'users', u.uid));
+            if (userSnap.exists() && userSnap.data().isAdmin) {
+                setIsAdmin(true);
+            } else {
+                alert("Access Denied: Admins Only");
+                navigate('/');
+            }
+        } catch (error) {
+            console.error("Admin Check Error:", error);
             navigate('/');
         }
       } else {
@@ -36,7 +41,7 @@ const AdminDashboard = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [navigate]);
 
   // 2. Real-Time Listeners
   useEffect(() => {
@@ -53,36 +58,35 @@ const AdminDashboard = () => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setVerifications(list);
         setStats(prev => ({ ...prev, verifications: list.length }));
-    }, (error) => {
-        console.error("Verification Query Error:", error);
-        if (error.message.includes("index")) {
-            alert("⚠️ MISSING INDEX: Open console (F12) and click the Firebase link to create it.");
-        }
-    });
+    }, (error) => console.error("Verify Listener Error", error));
 
-    // B. LISTEN FOR REPORTS
+    // B. LISTEN FOR REPORTS (Includes Shinobi Guilds/Messages)
     const qReports = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
     const unsubReports = onSnapshot(qReports, (snap) => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setReports(list);
         setStats(prev => ({ ...prev, reports: list.length }));
-    });
+    }, (error) => console.error("Report Listener Error", error));
 
     // C. FETCH STATIC STATS
     const fetchStaticStats = async () => {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const postsSnap = await getDocs(collection(db, 'posts'));
-        const ordersSnap = await getDocs(query(collection(db, 'orders'), where('status', '==', 'paid')));
-        
-        let totalRevenue = 0;
-        ordersSnap.forEach(doc => totalRevenue += (doc.data().amount || 0));
+        try {
+            const usersSnap = await getDocs(collection(db, 'users'));
+            const postsSnap = await getDocs(collection(db, 'posts'));
+            const ordersSnap = await getDocs(query(collection(db, 'orders'), where('status', '==', 'paid')));
+            
+            let totalRevenue = 0;
+            ordersSnap.forEach(doc => totalRevenue += (doc.data().amount || 0));
 
-        setStats(prev => ({
-            ...prev,
-            users: usersSnap.size,
-            posts: postsSnap.size,
-            revenue: totalRevenue
-        }));
+            setStats(prev => ({
+                ...prev,
+                users: usersSnap.size,
+                posts: postsSnap.size,
+                revenue: totalRevenue
+            }));
+        } catch (e) {
+            console.error("Stats Fetch Error", e);
+        }
     };
     fetchStaticStats();
 
@@ -99,61 +103,133 @@ const AdminDashboard = () => {
           const reqRef = doc(db, 'verification_requests', req.id);
           
           if (action === 'approve') {
-              // 1. Mark Request as Approved
               batch.update(reqRef, { status: 'approved', processedAt: serverTimestamp() });
               
-              // 2. CHECK: Is it a Business or a User?
               if (req.targetType === 'business_page') {
-                  // --- VERIFY BUSINESS PAGE ---
                   const businessRef = doc(db, 'business_pages', req.targetId);
                   batch.update(businessRef, { isVerified: true });
               } else {
-                  // --- VERIFY USER PROFILE ---
-                  const targetUserId = req.targetId || req.uid; // Fallback for old requests
+                  const targetUserId = req.targetId || req.uid;
                   const userRef = doc(db, 'users', targetUserId);
                   batch.update(userRef, { isVerified: true });
               }
 
-              // 3. Notify the Requester
               const notifRef = doc(collection(db, 'notifications'));
               batch.set(notifRef, {
-                  recipientId: req.uid, // Notification always goes to the user who asked
+                  recipientId: req.uid,
                   type: 'system',
-                  message: `Congratulations! Your ${req.targetType === 'business_page' ? 'Business Page' : 'Profile'} verification request was approved.`,
+                  message: `Your ${req.targetType === 'business_page' ? 'Business' : 'Profile'} verification was approved!`,
                   timestamp: serverTimestamp(),
                   isRead: false
               });
 
           } else {
-              // Reject
               batch.update(reqRef, { status: 'rejected', processedAt: serverTimestamp() });
           }
 
           await batch.commit();
-          alert(`Request ${action}d successfully!`);
+          alert(`Request ${action}d!`);
 
       } catch (e) {
-          console.error("Verification Action Failed:", e);
-          alert("Action failed. Check console for details.");
+          console.error("Action Failed:", e);
+          alert("Action failed.");
       }
+  };
+
+  const handleViewContent = (rep) => {
+      // 1. SHINOBI: Guilds (Groups)
+      if (rep.type === 'guild') {
+          // Navigates to ShinobiMessenger and forces the guild open via location.state
+          navigate('/messages', { 
+              state: { activeConversationId: rep.targetId } 
+          });
+          return;
+      }
+
+      // 2. SHINOBI: Chat Users / Messages
+      if (rep.type === 'message' || (rep.type === 'user' && rep.context === 'shinobi')) {
+          // Opens Shinobi with the specific user selected
+          navigate('/messages', { 
+              state: { userId: rep.targetId } 
+          });
+          return;
+      }
+
+      // 3. CIRCLES
+      if (rep.type === 'circle' || (rep.circleId && rep.postId)) {
+          navigate(`/circles/${rep.targetId || rep.circleId}`);
+          return;
+      }
+
+      // 4. USERS / PROFILES (General)
+      if (rep.type === 'user' || rep.type === 'profile') {
+          navigate(`/profile/${rep.targetId}`);
+          return;
+      }
+
+      // 5. POSTS
+      if (rep.type === 'post') {
+          navigate(`/post/${rep.targetId || rep.postId}`);
+          return;
+      }
+
+      // 6. BUSINESS / MARKETPLACE
+      if (rep.type === 'business') {
+          navigate(`/business/${rep.targetId}`);
+          return;
+      }
+      if (rep.type === 'product' || rep.type === 'marketplace') {
+          navigate(`/product/${rep.targetId}`);
+          return;
+      }
+
+      // Fallback
+      if (rep.targetId) navigate(`/profile/${rep.targetId}`);
+      else alert("Target not found.");
   };
 
   const handleReportAction = async (report, action) => {
       try {
           if (action === 'delete_content') {
-              if (!confirm("Delete this content permanently?")) return;
-              const collectionName = report.type === 'post' ? 'posts' : report.type === 'product' ? 'marketplace' : 'circles';
-              await deleteDoc(doc(db, collectionName, report.targetId || report.postId));
-              alert("Content deleted.");
+              if (!confirm("Permanently delete this content? This cannot be undone.")) return;
+              
+              let collectionName = 'posts'; 
+              let docId = report.targetId || report.postId;
+
+              // Map Report Type to Firestore Collection
+              if (report.type === 'product') collectionName = 'marketplace';
+              else if (report.type === 'circle') collectionName = 'circles';
+              else if (report.type === 'business') collectionName = 'business_pages';
+              
+              // SHINOBI MAPPING
+              else if (report.type === 'guild') {
+                  collectionName = 'conversations'; // Deleting a guild removes the conversation doc
+              }
+              
+              // Perform Delete
+              if (report.circleId && report.postId) {
+                  // Specific sub-collection for circle posts
+                  await deleteDoc(doc(db, `circles/${report.circleId}/posts`, report.postId));
+              } else {
+                  await deleteDoc(doc(db, collectionName, docId));
+              }
+              
+              alert("Content deleted successfully.");
           }
+          
+          // Remove the Report ticket itself
           await deleteDoc(doc(db, 'reports', report.id));
+          
+          // Update local state to remove the item immediately
+          setReports(prev => prev.filter(r => r.id !== report.id));
+          
       } catch (e) {
           console.error(e);
-          alert("Action failed.");
+          alert("Action failed. Check console.");
       }
   };
 
-  if (loading) return <div className="p-20 text-center">Loading Dashboard...</div>;
+  if (loading) return <div className="flex items-center justify-center h-screen text-gray-500 font-bold">Verifying Admin Access...</div>;
   if (!isAdmin) return null;
 
   return (
@@ -162,11 +238,11 @@ const AdminDashboard = () => {
       
       <div className="flex items-center gap-4 mb-8">
           <div className="w-12 h-12 bg-dark rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg">
-              <i className="fas fa-shield-alt"></i>
+              <i className="fas fa-user-shield"></i>
           </div>
           <div>
               <h1 className="text-3xl font-black text-dark">Admin Dashboard</h1>
-              <p className="text-gray-500 font-bold">Manage your platform.</p>
+              <p className="text-gray-500 font-bold">Platform Overview & Moderation</p>
           </div>
       </div>
 
@@ -176,7 +252,7 @@ const AdminDashboard = () => {
               <button 
                 key={t} 
                 onClick={() => setActiveTab(t)}
-                className={`px-6 py-3 font-bold capitalize transition-all border-b-4 ${activeTab === t ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-dark'}`}
+                className={`px-6 py-3 font-bold capitalize transition-all border-b-4 whitespace-nowrap ${activeTab === t ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-dark'}`}
               >
                   {t === 'verify' && verifications.length > 0 ? `Verify (${verifications.length})` : t === 'reports' && reports.length > 0 ? `Reports (${reports.length})` : t}
               </button>
@@ -213,14 +289,14 @@ const AdminDashboard = () => {
       {/* --- VERIFICATIONS TAB --- */}
       {activeTab === 'verify' && (
           <div className="space-y-4 animate-fade-in">
-              {verifications.length === 0 ? <div className="text-center py-20 text-gray-400">No pending requests.</div> : verifications.map(req => (
+              {verifications.length === 0 ? <div className="text-center py-20 text-gray-400 font-bold">No pending verification requests.</div> : verifications.map(req => (
                   <div key={req.id} className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6">
                       <div className="flex gap-4 overflow-x-auto">
-                          <a href={req.frontURL} target="_blank" rel="noreferrer" className="block w-40 h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 relative group">
+                          <a href={req.frontURL} target="_blank" rel="noreferrer" className="block w-40 h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 relative group shrink-0">
                               <img src={req.frontURL} className="w-full h-full object-cover" alt="ID Front" />
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-bold">View Front</div>
                           </a>
-                          <a href={req.backURL} target="_blank" rel="noreferrer" className="block w-40 h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 relative group">
+                          <a href={req.backURL} target="_blank" rel="noreferrer" className="block w-40 h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 relative group shrink-0">
                               <img src={req.backURL} className="w-full h-full object-cover" alt="ID Back" />
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-bold">View Back</div>
                           </a>
@@ -258,20 +334,34 @@ const AdminDashboard = () => {
       {/* --- REPORTS TAB --- */}
       {activeTab === 'reports' && (
           <div className="space-y-4 animate-fade-in">
-               {reports.length === 0 ? <div className="text-center py-20 text-gray-400">Clean records! No reports.</div> : reports.map(rep => (
-                   <div key={rep.id} className="bg-white p-4 rounded-[24px] shadow-sm border border-red-100 flex items-center gap-4">
-                       <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-500 text-xl shrink-0">
-                           <i className="fas fa-exclamation-triangle"></i>
+               {reports.length === 0 ? <div className="text-center py-20 text-gray-400 font-bold">Clean records! No reports found.</div> : reports.map(rep => (
+                   <div key={rep.id} className="bg-white p-4 rounded-[24px] shadow-sm border border-red-100 flex flex-col md:flex-row items-center gap-4">
+                       <div className="flex items-center gap-4 w-full md:w-auto">
+                           <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-500 text-xl shrink-0">
+                               <i className={`fas ${rep.type === 'guild' ? 'fa-users-slash' : 'fa-exclamation-triangle'}`}></i>
+                           </div>
+                           <div className="flex-1 md:hidden">
+                               <h4 className="font-bold text-dark text-sm capitalize">{rep.type || 'Content'} Report</h4>
+                               <p className="text-xs text-red-500 font-bold uppercase tracking-wider mt-1">{rep.reason}</p>
+                           </div>
                        </div>
-                       <div className="flex-1">
-                           <h4 className="font-bold text-dark text-sm">Reported {rep.type}</h4>
+                       
+                       <div className="flex-1 hidden md:block">
+                           <h4 className="font-bold text-dark text-sm capitalize">{rep.type || 'Content'} Report</h4>
                            <p className="text-xs text-red-500 font-bold uppercase tracking-wider mt-1">{rep.reason}</p>
-                           <p className="text-xs text-gray-400 mt-1">Target ID: {rep.targetId || rep.postId}</p>
+                           <p className="text-xs text-gray-400 mt-1">ID: {rep.targetId || rep.postId || rep.circleId}</p>
                        </div>
-                       <div className="flex gap-2">
-                           <button onClick={() => navigate(rep.type === 'post' ? `/post/${rep.targetId || rep.postId}` : `/product/${rep.targetId}`)} className="px-4 py-2 bg-gray-100 text-dark rounded-lg text-xs font-bold hover:bg-gray-200">View Content</button>
-                           <button onClick={() => handleReportAction(rep, 'delete_content')} className="px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-sm">Delete Content</button>
-                           <button onClick={() => handleReportAction(rep, 'dismiss')} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-lg text-xs font-bold hover:bg-gray-50">Dismiss</button>
+
+                       <div className="flex gap-2 w-full md:w-auto justify-end">
+                           <button onClick={() => handleViewContent(rep)} className="px-4 py-2 bg-gray-100 text-dark rounded-lg text-xs font-bold hover:bg-gray-200 flex items-center gap-2">
+                               <i className="fas fa-eye"></i> View
+                           </button>
+                           <button onClick={() => handleReportAction(rep, 'delete_content')} className="px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-sm flex items-center gap-2">
+                               <i className="fas fa-trash"></i> Delete Content
+                           </button>
+                           <button onClick={() => handleReportAction(rep, 'dismiss')} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-lg text-xs font-bold hover:bg-gray-50">
+                               Dismiss
+                           </button>
                        </div>
                    </div>
                ))}
